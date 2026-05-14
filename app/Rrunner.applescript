@@ -1,18 +1,29 @@
-on open location this_URL
-    set runnerPath to POSIX path of (path to home folder) & ".local/bin/rrunner"
-
-    do shell script "/bin/mkdir -p " & quoted form of (POSIX path of (path to home folder) & ".local/bin")
-
-    try
-        do shell script "/usr/bin/test -x " & quoted form of runnerPath
-    on error
-        display alert "Rrunner" message "The Rrunner command-line bridge was not found at:" & return & runnerPath & return & return & "Run install.sh from the Rrunner repo."
-        return
-    end try
-
-    do shell script quoted form of runnerPath & space & quoted form of this_URL & " >/tmp/Rrunner.log 2>&1 &"
-end open location
+property bridgePath : "/Users/rd/.local/bin/rrunner"
 
 on run
-    display dialog "Rrunner is installed and handles rrunner:// links." buttons {"OK"} default button "OK"
+	set ok to my bridge_exists()
+	if ok is false then
+		display dialog "The Rrunner command-line bridge was not found or is not executable at:" & return & bridgePath & return & return & "Run install.sh from the Rrunner repo." buttons {"OK"} default button "OK" with icon stop
+	else
+		display dialog "Rrunner is installed and ready." & return & return & bridgePath buttons {"OK"} default button "OK"
+	end if
 end run
+
+on open location thisURL
+	set ok to my bridge_exists()
+	if ok is false then
+		display dialog "The Rrunner command-line bridge was not found or is not executable at:" & return & bridgePath & return & return & "Run install.sh from the Rrunner repo." buttons {"OK"} default button "OK" with icon stop
+		return
+	end if
+	
+	do shell script quoted form of bridgePath & space & quoted form of thisURL
+end open location
+
+on bridge_exists()
+	try
+		do shell script "/bin/test -x " & quoted form of bridgePath
+		return true
+	on error
+		return false
+	end try
+end bridge_exists

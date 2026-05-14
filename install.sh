@@ -1,55 +1,62 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="Rrunner"
 APP_PATH="/Applications/${APP_NAME}.app"
-BRIDGE_DIR="$HOME/.local/bin"
+BIN_DIR="$HOME/.local/bin"
+BRIDGE_SRC="$REPO_DIR/bin/rrunner"
+BRIDGE_DEST="$BIN_DIR/rrunner"
 
-mkdir -p "$BRIDGE_DIR"
+mkdir -p "$BIN_DIR"
 
-install -m 755 "$ROOT/bin/rrunner" "$BRIDGE_DIR/rrunner"
+chmod +x "$REPO_DIR/bin/rrunner" \
+         "$REPO_DIR/bin/rrunner.sh" \
+         "$REPO_DIR/bin/md-restore.sh"
 
-if [[ -d "$APP_PATH" ]]; then
-  rm -rf "$APP_PATH"
+# Install bridge only if source and destination are not already the same file
+if [[ -e "$BRIDGE_DEST" ]] && [[ "$(realpath "$BRIDGE_SRC")" == "$(realpath "$BRIDGE_DEST")" ]]; then
+  echo "Bridge already installed: $BRIDGE_DEST"
+else
+  install -m 755 "$BRIDGE_SRC" "$BRIDGE_DEST"
+  echo "Installed bridge: $BRIDGE_DEST"
 fi
 
-osacompile -o "$APP_PATH" "$ROOT/app/Rrunner.applescript"
+rm -rf "$APP_PATH"
+
+osacompile -o "$APP_PATH" "$REPO_DIR/app/Rrunner.applescript"
 
 mkdir -p "$APP_PATH/Contents/Resources"
-cp "$ROOT/app/Rrunner.icns" "$APP_PATH/Contents/Resources/Rrunner.icns"
+cp "$REPO_DIR/app/Rrunner.icns" "$APP_PATH/Contents/Resources/Rrunner.icns"
 
-PLIST="$APP_PATH/Contents/Info.plist"
+INFO_PLIST="$APP_PATH/Contents/Info.plist"
 
-/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.deathrashed.Rrunner" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.deathrashed.Rrunner" "$PLIST"
-/usr/libexec/PlistBuddy -c "Set :CFBundleName Rrunner" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleName string Rrunner" "$PLIST"
-/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Rrunner" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Rrunner" "$PLIST"
-/usr/libexec/PlistBuddy -c "Set :CFBundleIconFile Rrunner.icns" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Rrunner.icns" "$PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName Rrunner" "$INFO_PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleName string Rrunner" "$INFO_PLIST"
 
-/usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "$PLIST" 2>/dev/null || true
-/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PLIST"
-/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$PLIST"
-/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string Rrunner URL" "$PLIST"
-/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST"
-/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string rrunner" "$PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Rrunner" "$INFO_PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Rrunner" "$INFO_PLIST"
 
-/usr/bin/plutil -lint "$PLIST" >/dev/null
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.deathrashed.Rrunner" "$INFO_PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.deathrashed.Rrunner" "$INFO_PLIST"
 
-# Register the URL handler with Launch Services.
-open "$APP_PATH" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleIconFile Rrunner" "$INFO_PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Rrunner" "$INFO_PLIST"
 
-cat <<EOF
-Installed Rrunner.
+# Replace URL scheme registration
+/usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "$INFO_PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string Rrunner URL Scheme" "$INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string rrunner" "$INFO_PLIST"
 
-App:
-  $APP_PATH
+# Refresh Launch Services registration
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+  -f "$APP_PATH" >/dev/null 2>&1 || true
 
-Bridge:
-  $BRIDGE_DIR/rrunner
-
-URL scheme:
-  rrunner://
-
-Try:
-  open 'rrunner://launch?app=Ghostty'
-EOF
+echo "Installed $APP_PATH"
+echo "Installed bridge at $BRIDGE_DEST"
+echo
+echo "Test with:"
+echo "open 'rrunner://open?url=file:///Users/rd/Scripts/Riley/rrunner/README.md'"
