@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Tiny local bridge for Rrunner.app.
+# It fetches the latest public runner logic from GitHub, caches it, then executes it.
+
+URL="${1:-}"
+if [[ -z "$URL" ]]; then
+  echo "Usage: rrunner 'rrunner://action?url=file:///path'" >&2
+  exit 2
+fi
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+RUNNER_URL="${RRUNNER_REMOTE_URL:-https://raw.githubusercontent.com/deathrashed/rrunner/main/bin/rrunner.sh}"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/Library/Caches}/Rrunner"
+CACHE_FILE="$CACHE_DIR/rrunner.sh"
+
+mkdir -p "$CACHE_DIR"
+
+fetch_runner() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$RUNNER_URL" -o "$CACHE_FILE.tmp"
+    chmod +x "$CACHE_FILE.tmp"
+    mv "$CACHE_FILE.tmp" "$CACHE_FILE"
+  else
+    return 1
+  fi
+}
+
+if ! fetch_runner; then
+  if [[ ! -x "$CACHE_FILE" ]]; then
+    echo "Rrunner could not fetch runner and no cached copy exists: $RUNNER_URL" >&2
+    exit 1
+  fi
+fi
+
+exec /bin/bash "$CACHE_FILE" "$URL"
