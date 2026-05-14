@@ -1,64 +1,66 @@
 # Rrunner URL Schemes
 
-## Shape
+## File operations
 
-```text
-rrunner://ACTION?key=value&key=value
+```md
+[Open](<rrunner://open?url=file:///path/to/file.txt>)
+[Reveal](<rrunner://reveal?url=file:///path/to/file.txt>)
+[Show](<rrunner://show?url=file:///path/to/file.txt>)
 ```
 
-The most important payload keys are:
+## Open with a specific app
 
-```text
-url=file:///absolute/path/to/file
-path=/absolute/path/to/file
-app=com.example.BundleID
+```md
+[CotEditor](<rrunner://openwith?app=com.coteditor.CotEditor&url=file:///path/to/file.txt>)
+[VS Code](<rrunner://openwith?app=com.microsoft.VSCode&url=file:///path/to/file.txt>)
+[Script Editor](<rrunner://openwith?app=com.apple.ScriptEditor2&url=file:///path/to/script.applescript>)
+[Marked](<rrunner://openwith?app=com.brettterpstra.marked2&url=file:///path/to/file.md>)
 ```
 
-Prefer `url=file://...` for paths containing spaces or special characters.
+`view` is an alias for `openwith`:
 
-## Actions
-
-### Open
-
-```text
-rrunner://open?url=file:///Users/rd/file.txt
+```md
+[CotEditor](<rrunner://view?app=com.coteditor.CotEditor&url=file:///path/to/file.txt>)
 ```
 
-### Reveal in Finder
+## Launch apps
 
-```text
-rrunner://reveal?url=file:///Users/rd/file.txt
+```md
+[Launch Ghostty](<rrunner://launch?app=Ghostty>)
+[Launch CotEditor](<rrunner://launch?app=com.coteditor.CotEditor>)
 ```
 
-### Open with app
+## Run scripts in Ghostty
 
-```text
-rrunner://openwith?app=com.coteditor.CotEditor&url=file:///Users/rd/file.txt
-rrunner://openwith?app=Ghostty&url=file:///Users/rd/script.sh
+```md
+[Auto-run](<rrunner://auto?url=file:///path/to/script.applescript>)
+[Run AppleScript](<rrunner://osascript?url=file:///path/to/script.applescript>)
+[Run Bash](<rrunner://bash?url=file:///path/to/script.sh>)
+[Run Zsh](<rrunner://zsh?url=file:///path/to/script.zsh>)
+[Run Python](<rrunner://python?url=file:///path/to/script.py>)
+[Run Node](<rrunner://node?url=file:///path/to/script.js>)
+[Run Ruby](<rrunner://ruby?url=file:///path/to/script.rb>)
+[Run Perl](<rrunner://perl?url=file:///path/to/script.pl>)
 ```
 
-### Launch app
+## Restore Markdown wrapper
 
-```text
-rrunner://launch?app=Ghostty
-rrunner://launch?app=com.microsoft.VSCode
+```md
+[Restore original](<rrunner://restore?url=file:///path/to/wrapper.md>)
 ```
 
-### Run
+## Custom handlers
+
+Any executable in `~/.config/rrunner/handlers` can become a URL action.
+
+Example handler:
 
 ```text
-rrunner://auto?url=file:///Users/rd/script.applescript
-rrunner://osascript?url=file:///Users/rd/script.applescript
-rrunner://bash?url=file:///Users/rd/script.sh
-rrunner://zsh?url=file:///Users/rd/script.zsh
-rrunner://python?url=file:///Users/rd/script.py
-rrunner://node?url=file:///Users/rd/script.js
-rrunner://ruby?url=file:///Users/rd/script.rb
-rrunner://perl?url=file:///Users/rd/script.pl
+~/.config/rrunner/handlers/open-project
 ```
 
-### Restore
+Example link:
 
-```text
-rrunner://restore?url=file:///Users/rd/wrapper.md
+```md
+[Open Project](<rrunner://open-project?url=file:///Users/rd/Projects/my-project>)
 ```

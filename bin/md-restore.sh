@@ -91,7 +91,8 @@ fi
 
 mkdir -p "$(dirname "$source_file")"
 
-tmp="$(mktemp "${TMPDIR:-/tmp}/mdrestore.XXXXXX")"
+tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/mdrestore.XXXXXX")"
+tmp="$tmpdir/payload.b64"
 printf '%s\n' "$payload" > "$tmp"
 
 if base64 --decode "$tmp" > "$source_file" 2>/dev/null; then
@@ -104,5 +105,5 @@ else
   exit 1
 fi
 
-rm -f "$tmp"
+rm -rf "$tmpdir"
 echo "Restored: $source_file"

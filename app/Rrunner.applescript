@@ -15,7 +15,7 @@ on open location thisURL
 		display dialog "The Rrunner command-line bridge was not found or is not executable at:" & return & bridgePath & return & return & "Run install.sh from the Rrunner repo." buttons {"OK"} default button "OK" with icon stop
 		return
 	end if
-	
+
 	do shell script quoted form of bridgePath & space & quoted form of thisURL
 end open location
 

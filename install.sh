@@ -14,7 +14,7 @@ chmod +x "$REPO_DIR/bin/rrunner" \
          "$REPO_DIR/bin/rrunner.sh" \
          "$REPO_DIR/bin/md-restore.sh"
 
-# Install bridge only if source and destination are not already the same file
+# Install bridge only if source and destination are not already the same file.
 if [[ -e "$BRIDGE_DEST" ]] && [[ "$(realpath "$BRIDGE_SRC")" == "$(realpath "$BRIDGE_DEST")" ]]; then
   echo "Bridge already installed: $BRIDGE_DEST"
 else
@@ -43,7 +43,7 @@ INFO_PLIST="$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile Rrunner" "$INFO_PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Rrunner" "$INFO_PLIST"
 
-# Replace URL scheme registration
+# Replace URL scheme registration.
 /usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "$INFO_PLIST" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$INFO_PLIST"
 /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$INFO_PLIST"
@@ -51,7 +51,9 @@ INFO_PLIST="$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$INFO_PLIST"
 /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string rrunner" "$INFO_PLIST"
 
-# Refresh Launch Services registration
+/usr/bin/plutil -lint "$INFO_PLIST" >/dev/null
+
+# Refresh Launch Services registration.
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
   -f "$APP_PATH" >/dev/null 2>&1 || true
 

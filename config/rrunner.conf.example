@@ -1,0 +1,25 @@
+# Rrunner configuration example
+# Copy to: ~/.config/rrunner/config
+
+# Which terminal app Rrunner should use for script execution.
+RRUNNER_TERMINAL_APP="Ghostty"
+
+# Keep terminal windows open after commands finish.
+# 1 = wait for Return, 0 = exit immediately.
+RRUNNER_KEEP_OPEN=1
+
+# Raw GitHub base URL used by the bridge and restore runner.
+RRUNNER_REMOTE_BASE="https://raw.githubusercontent.com/deathrashed/rrunner/main"
+
+# Optional override for the public runner and restore scripts.
+RRUNNER_REMOTE_URL="$RRUNNER_REMOTE_BASE/bin/rrunner.sh"
+RRUNNER_RESTORE_URL="$RRUNNER_REMOTE_BASE/bin/md-restore.sh"
+
+# Custom local handlers. Any executable named like the URL action wins first.
+# Example: ~/.config/rrunner/handlers/open-project
+RRUNNER_HANDLERS_DIR="$HOME/.config/rrunner/handlers"
+
+# Optional default editor apps for generated links/documentation.
+RRUNNER_TEXT_EDITOR="com.coteditor.CotEditor"
+RRUNNER_CODE_EDITOR="com.microsoft.VSCode"
+RRUNNER_MARKDOWN_PREVIEWER="com.brettterpstra.marked2"

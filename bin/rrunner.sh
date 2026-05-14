@@ -9,7 +9,20 @@ if [[ -z "$RAW_URL" ]]; then
   exit 2
 fi
 
-RESTORE_URL="${RRUNNER_RESTORE_URL:-https://raw.githubusercontent.com/deathrashed/rrunner/main/bin/md-restore.sh}"
+# Defaults. Local config can override these.
+RRUNNER_TERMINAL_APP="${RRUNNER_TERMINAL_APP:-Ghostty}"
+RRUNNER_KEEP_OPEN="${RRUNNER_KEEP_OPEN:-1}"
+RRUNNER_REMOTE_BASE="${RRUNNER_REMOTE_BASE:-https://raw.githubusercontent.com/deathrashed/rrunner/main}"
+RRUNNER_RESTORE_URL="${RRUNNER_RESTORE_URL:-$RRUNNER_REMOTE_BASE/bin/md-restore.sh}"
+RRUNNER_HANDLERS_DIR="${RRUNNER_HANDLERS_DIR:-$HOME/.config/rrunner/handlers}"
+
+# Load optional local config.
+for cfg in "/etc/rrunner.conf" "$HOME/.config/rrunner/config"; do
+  if [[ -f "$cfg" ]]; then
+    # shellcheck disable=SC1090
+    source "$cfg"
+  fi
+done
 
 notify() {
   /usr/bin/osascript - "$1" <<'APPLESCRIPT' >/dev/null 2>&1 || true
@@ -91,6 +104,13 @@ print(shlex.quote(sys.argv[1]))
 PY
 }
 
+require_payload() {
+  if [[ -z "$PATH_PAYLOAD" ]]; then
+    alert "No file url/path supplied."
+    exit 1
+  fi
+}
+
 open_app_with_file() {
   local app="$1"
   local path="$2"
@@ -118,7 +138,7 @@ launch_app() {
   fi
 }
 
-ghostty_command() {
+run_command_in_terminal() {
   local cmd="$1"
   local tmpdir tmp
   tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/rrunner.XXXXXX")"
@@ -132,16 +152,19 @@ $cmd
 status=\$?
 echo
 echo "Exit status: \$status"
-echo
-echo "Press Return to close..."
-read -r _
+if [[ "${RRUNNER_KEEP_OPEN}" == "1" ]]; then
+  echo
+  echo "Press Return to close..."
+  read -r _
+fi
+exit \$status
 EOF
   chmod +x "$tmp"
 
   if command -v ghostty >/dev/null 2>&1; then
     ghostty -e /bin/zsh "$tmp" >/dev/null 2>&1 &
   else
-    open -a Ghostty "$tmp" >/dev/null 2>&1 || open -a Terminal "$tmp" >/dev/null 2>&1
+    open -a "$RRUNNER_TERMINAL_APP" "$tmp" >/dev/null 2>&1 || open -a Terminal "$tmp" >/dev/null 2>&1
   fi
 }
 
@@ -157,13 +180,13 @@ run_with() {
   q="$(quote_for_shell "$path")"
 
   case "$runner" in
-    osascript) ghostty_command "osascript $q" ;;
-    bash)      ghostty_command "bash $q" ;;
-    zsh)       ghostty_command "zsh $q" ;;
-    python)    ghostty_command "python3 $q" ;;
-    node)      ghostty_command "node $q" ;;
-    ruby)      ghostty_command "ruby $q" ;;
-    perl)      ghostty_command "perl $q" ;;
+    osascript) run_command_in_terminal "osascript $q" ;;
+    bash)      run_command_in_terminal "bash $q" ;;
+    zsh)       run_command_in_terminal "zsh $q" ;;
+    python)    run_command_in_terminal "python3 $q" ;;
+    node)      run_command_in_terminal "node $q" ;;
+    ruby)      run_command_in_terminal "ruby $q" ;;
+    perl)      run_command_in_terminal "perl $q" ;;
     *)
       alert "Unknown runner: $runner"
       exit 1
@@ -184,7 +207,7 @@ restore_md() {
   mkdir -p "$cache_dir"
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$RESTORE_URL" -o "$restore_file.tmp"
+    curl -fsSL "$RRUNNER_RESTORE_URL" -o "$restore_file.tmp"
     chmod +x "$restore_file.tmp"
     mv "$restore_file.tmp" "$restore_file"
   fi
@@ -196,7 +219,7 @@ restore_md() {
 
   local q
   q="$(quote_for_shell "$md")"
-  ghostty_command "bash $(quote_for_shell "$restore_file") restore $q"
+  run_command_in_terminal "bash $(quote_for_shell "$restore_file") restore $q"
 }
 
 auto_run() {
@@ -220,36 +243,53 @@ auto_run() {
   esac
 }
 
+run_custom_handler_if_present() {
+  local action="$1"
+  local handler="$RRUNNER_HANDLERS_DIR/$action"
+
+  if [[ -x "$handler" ]]; then
+    export RRUNNER_ACTION="$action"
+    export RRUNNER_URL="$RAW_URL"
+    export RRUNNER_PATH="$PATH_PAYLOAD"
+    export RRUNNER_APP="$APP_PAYLOAD"
+    "$handler"
+    exit $?
+  fi
+}
+
 ACTION="$(action_from_url)"
 PATH_PAYLOAD="$(payload_path)"
 APP_PAYLOAD="$(query_value app)"
 
+# Custom local handlers can override or add actions.
+run_custom_handler_if_present "$ACTION"
+
 case "$ACTION" in
   open)
-    [[ -n "$PATH_PAYLOAD" ]] || { alert "No file url/path supplied."; exit 1; }
+    require_payload
     open "$PATH_PAYLOAD"
     ;;
   reveal|show)
-    [[ -n "$PATH_PAYLOAD" ]] || { alert "No file url/path supplied."; exit 1; }
+    require_payload
     open -R "$PATH_PAYLOAD"
     ;;
   openwith|view)
-    [[ -n "$PATH_PAYLOAD" ]] || { alert "No file url/path supplied."; exit 1; }
+    require_payload
     open_app_with_file "$APP_PAYLOAD" "$PATH_PAYLOAD"
     ;;
   launch)
     launch_app "$APP_PAYLOAD"
     ;;
   auto)
-    [[ -n "$PATH_PAYLOAD" ]] || { alert "No file url/path supplied."; exit 1; }
+    require_payload
     auto_run "$PATH_PAYLOAD"
     ;;
   osascript|bash|zsh|python|node|ruby|perl)
-    [[ -n "$PATH_PAYLOAD" ]] || { alert "No file url/path supplied."; exit 1; }
+    require_payload
     run_with "$ACTION" "$PATH_PAYLOAD"
     ;;
   restore)
-    [[ -n "$PATH_PAYLOAD" ]] || { alert "No Markdown url/path supplied."; exit 1; }
+    require_payload
     restore_md "$PATH_PAYLOAD"
     ;;
   *)

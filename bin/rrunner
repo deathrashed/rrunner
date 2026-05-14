@@ -12,7 +12,17 @@ fi
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-RUNNER_URL="${RRUNNER_REMOTE_URL:-https://raw.githubusercontent.com/deathrashed/rrunner/main/bin/rrunner.sh}"
+# Load optional local config before deciding remote URL.
+for cfg in "/etc/rrunner.conf" "$HOME/.config/rrunner/config"; do
+  if [[ -f "$cfg" ]]; then
+    # shellcheck disable=SC1090
+    source "$cfg"
+  fi
+done
+
+RRUNNER_REMOTE_BASE="${RRUNNER_REMOTE_BASE:-https://raw.githubusercontent.com/deathrashed/rrunner/main}"
+RUNNER_URL="${RRUNNER_REMOTE_URL:-$RRUNNER_REMOTE_BASE/bin/rrunner.sh}"
+
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/Library/Caches}/Rrunner"
 CACHE_FILE="$CACHE_DIR/rrunner.sh"
 
