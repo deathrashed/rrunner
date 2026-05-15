@@ -15,7 +15,7 @@ rrunner --list-actions --markdown
 rrunner --list-actions --markdown --agent-notes
 rrunner --export-actions docs/ACTIONS.generated.md --agent-notes
 rrunner --explain-action edit --markdown
-rrunner --print-url edit README.md --markdown-link "Edit README"
+rrunner --print-url edit --markdown-link "Edit README" README.md
 ```
 
 Action catalog output includes a risk marker:

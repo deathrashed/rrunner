@@ -48,7 +48,7 @@ open 'rrunner://launch?app=Ghostty'
 rrunner --list-actions
 rrunner --list-actions --markdown --agent-notes
 rrunner --explain-action open --markdown
-rrunner --print-url open README.md --markdown-link "Open README"
+rrunner --print-url open --markdown-link "Open README" README.md
 rrunner --dry-run 'rrunner://open?url=file:///Users/rd/Scripts/Riley/rrunner/README.md'
 rrunner --diagnose
 ./install.sh --dry-run
@@ -194,7 +194,7 @@ rrunner --list-actions --json
 rrunner --list-actions --markdown --agent-notes
 rrunner --export-actions docs/ACTIONS.generated.md --agent-notes
 rrunner --explain-action edit --markdown
-rrunner --print-url edit README.md --markdown-link "Edit README"
+rrunner --print-url edit --markdown-link "Edit README" README.md
 rrunner --dry-run 'rrunner://edit?url=file:///path/to/file.md'
 rrunner --diagnose
 ```
