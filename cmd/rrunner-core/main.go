@@ -1065,7 +1065,7 @@ func splitCSV(s string) []string {
 type ActionExplanation struct {
 	Action     ActionSpec   `json:"action"`
 	Risk       string       `json:"risk"`
-	ExampleURL  string       `json:"example_url"`
+	ExampleURL string       `json:"example_url"`
 	ShadowedBy []ActionSpec `json:"shadowed_by,omitempty"`
 	Warnings   []string     `json:"warnings,omitempty"`
 }

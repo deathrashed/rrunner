@@ -91,11 +91,15 @@ flowchart TD
   ```
   Useful runtime checks:
   ```bash
-  rrunner --version
-  rrunner --list-actions
-  rrunner --list-actions --json
-  rrunner --dry-run 'rrunner://edit?url=file:///path/to/file.md'
-  rrunner --diagnose
+    rrunner --version
+    rrunner --list-actions
+    rrunner --list-actions --json
+    rrunner --list-actions --markdown --agent-notes
+    rrunner --export-actions docs/ACTIONS.generated.md --agent-notes
+    rrunner --explain-action edit --markdown
+    rrunner --print-url edit README.md --markdown-link "Edit README"
+    rrunner --dry-run 'rrunner://edit?url=file:///path/to/file.md'
+    rrunner --diagnose
   ```
 * **CI/CD:** Not defined in repository. No `.github/workflows`, Dockerfile, Justfile, Taskfile, or env example was found. Local validation is provided by `Makefile`.
 
