@@ -20,4 +20,13 @@
 ## Restore
 
 - [Restore original](<rrunner://restore?url=file:///Users/rd/Scripts/tool.md>)
+
+## Custom TOML actions
+
+These assume matching `[actions.<name>]` entries in `~/.config/rrunner/config.toml`.
+
+- [Edit](<rrunner://edit?url=file:///Users/rd/Scripts/tool.applescript>)
+- [Preview](<rrunner://preview?url=file:///Users/rd/Scripts/tool.md>)
+- [Run Zsh](<rrunner://run-zsh?url=file:///Users/rd/Scripts/tool.zsh>)
+- [Build Project](<rrunner://project-build?url=file:///Users/rd/Projects/my-project>)
 ```

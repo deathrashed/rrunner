@@ -4,21 +4,107 @@ set -euo pipefail
 # Tiny local bridge for Rrunner.app.
 # It fetches the latest public runner logic from GitHub, caches it, then executes it.
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+CORE="${RRUNNER_CORE:-$HOME/.local/lib/rrunner/rrunner-core}"
+if [[ "${RRUNNER_DISABLE_GO_CORE:-0}" != "1" && -x "$CORE" ]]; then
+  exec "$CORE" "$@"
+fi
+
 URL="${1:-}"
 if [[ -z "$URL" ]]; then
-  echo "Usage: rrunner 'rrunner://action?url=file:///path'" >&2
+  echo "Usage: rrunner [--diagnose|--list-actions|--dry-run] 'rrunner://action?url=file:///path'" >&2
   exit 2
 fi
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+parse_toml_bridge_exports() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
 
-# Load optional local config before deciding remote URL.
+  /usr/bin/python3 - "$file" <<'PY'
+import ast
+import re
+import shlex
+import sys
+
+path = sys.argv[1]
+section = None
+settings = {}
+section_re = re.compile(r'^\s*\[([^\]]+)\]\s*(?:#.*)?$')
+key_re = re.compile(r'^\s*([A-Za-z0-9_-]+)\s*=\s*(.*?)\s*(?:#.*)?$')
+
+try:
+    with open(path, 'r', encoding='utf-8') as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped or stripped.startswith('#'):
+                continue
+            sec = section_re.match(line)
+            if sec:
+                section = sec.group(1).strip()
+                continue
+            key = key_re.match(line)
+            if section == 'settings' and key:
+                value = key.group(2).strip()
+                if value and value[0] in ('"', "'"):
+                    try:
+                        value = ast.literal_eval(value)
+                    except Exception:
+                        value = value.strip('"\'')
+                settings[key.group(1).replace('-', '_')] = value
+except OSError:
+    sys.exit(0)
+
+mapping = {
+    'remote_base': 'RRUNNER_REMOTE_BASE',
+    'remote_url': 'RRUNNER_REMOTE_URL',
+}
+for key, env_name in mapping.items():
+    value = settings.get(key)
+    if value:
+        print(f'{env_name}={shlex.quote(str(value))}')
+PY
+}
+
+parse_legacy_config_exports() {
+  local file="$1"
+  /usr/bin/python3 - "$file" <<'PY'
+import ast, re, shlex, sys
+allowed = {
+    'RRUNNER_REMOTE_BASE', 'RRUNNER_REMOTE_URL', 'RRUNNER_RESTORE_URL',
+    'RRUNNER_HANDLERS_DIR', 'RRUNNER_TERMINAL_APP', 'RRUNNER_KEEP_OPEN'
+}
+for line in open(sys.argv[1], encoding='utf-8', errors='ignore'):
+    m = re.match(r'^\s*(RRUNNER_[A-Z0-9_]+)\s*=\s*(.*?)\s*(?:#.*)?$', line)
+    if not m or m.group(1) not in allowed:
+        continue
+    value = m.group(2).strip()
+    if value and value[0] in ('"', "'"):
+        try:
+            value = ast.literal_eval(value)
+        except Exception:
+            value = value.strip('"\'')
+    print(f'{m.group(1)}={shlex.quote(str(value))}')
+PY
+}
+
+# Load optional legacy shell config before deciding remote URL.
+# For safety, parse only allowlisted RRUNNER_* assignments by default.
 for cfg in "/etc/rrunner.conf" "$HOME/.config/rrunner/config"; do
   if [[ -f "$cfg" ]]; then
-    # shellcheck disable=SC1090
-    source "$cfg"
+    if [[ "${RRUNNER_ALLOW_LEGACY_SOURCE:-0}" == "1" ]]; then
+      # shellcheck disable=SC1090
+      source "$cfg"
+    else
+      eval "$(parse_legacy_config_exports "$cfg")"
+    fi
   fi
 done
+
+RRUNNER_CONFIG_TOML="${RRUNNER_CONFIG_TOML:-$HOME/.config/rrunner/config.toml}"
+if [[ -f "$RRUNNER_CONFIG_TOML" ]]; then
+  eval "$(parse_toml_bridge_exports "$RRUNNER_CONFIG_TOML")"
+fi
 
 RRUNNER_REMOTE_BASE="${RRUNNER_REMOTE_BASE:-https://raw.githubusercontent.com/deathrashed/rrunner/main}"
 RUNNER_URL="${RRUNNER_REMOTE_URL:-$RRUNNER_REMOTE_BASE/bin/rrunner.sh}"

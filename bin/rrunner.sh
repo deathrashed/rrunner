@@ -3,9 +3,14 @@ set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+CORE="${RRUNNER_CORE:-$HOME/.local/lib/rrunner/rrunner-core}"
+if [[ "${RRUNNER_DISABLE_GO_CORE:-0}" != "1" && -x "$CORE" ]]; then
+  exec "$CORE" "$@"
+fi
+
 RAW_URL="${1:-}"
 if [[ -z "$RAW_URL" ]]; then
-  echo "Usage: rrunner.sh 'rrunner://action?url=file:///path'" >&2
+  echo "Usage: rrunner.sh [--diagnose|--list-actions|--dry-run] 'rrunner://action?url=file:///path'" >&2
   exit 2
 fi
 
@@ -13,16 +18,170 @@ fi
 RRUNNER_TERMINAL_APP="${RRUNNER_TERMINAL_APP:-Ghostty}"
 RRUNNER_KEEP_OPEN="${RRUNNER_KEEP_OPEN:-1}"
 RRUNNER_REMOTE_BASE="${RRUNNER_REMOTE_BASE:-https://raw.githubusercontent.com/deathrashed/rrunner/main}"
-RRUNNER_RESTORE_URL="${RRUNNER_RESTORE_URL:-$RRUNNER_REMOTE_BASE/bin/md-restore.sh}"
+RRUNNER_RESTORE_URL="${RRUNNER_RESTORE_URL:-}"
 RRUNNER_HANDLERS_DIR="${RRUNNER_HANDLERS_DIR:-$HOME/.config/rrunner/handlers}"
+RRUNNER_CONFIG_TOML="${RRUNNER_CONFIG_TOML:-$HOME/.config/rrunner/config.toml}"
 
-# Load optional local config.
+parse_toml_exports() {
+  local mode="$1"
+  local file="$2"
+  local action="${3:-}"
+
+  [[ -f "$file" ]] || return 0
+
+  /usr/bin/python3 - "$mode" "$file" "$action" <<'PY'
+import ast
+import re
+import shlex
+import sys
+
+mode, path, wanted_action = sys.argv[1], sys.argv[2], sys.argv[3]
+
+SECTION_RE = re.compile(r'^\s*\[([^\]]+)\]\s*(?:#.*)?$')
+KEY_RE = re.compile(r'^\s*([A-Za-z0-9_-]+)\s*=\s*(.*?)\s*$')
+
+
+def strip_comment(value):
+    quote = None
+    escaped = False
+    out = []
+    for ch in value:
+        if quote:
+            out.append(ch)
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == quote:
+                quote = None
+        else:
+            if ch in ('"', "'"):
+                quote = ch
+                out.append(ch)
+            elif ch == '#':
+                break
+            else:
+                out.append(ch)
+    return ''.join(out).strip()
+
+
+def parse_value(raw):
+    value = strip_comment(raw)
+    if not value:
+        return ''
+    if value[0] in ('"', "'"):
+        try:
+            return ast.literal_eval(value)
+        except Exception:
+            return value.strip('"\'')
+    lower = value.lower()
+    if lower in ('true', 'false'):
+        return '1' if lower == 'true' else '0'
+    return value
+
+
+def parse_section(raw):
+    parts = [part.strip() for part in raw.split('.')]
+    cleaned = []
+    for part in parts:
+        if len(part) >= 2 and part[0] in ('"', "'") and part[-1] == part[0]:
+            try:
+                part = ast.literal_eval(part)
+            except Exception:
+                part = part[1:-1]
+        cleaned.append(part)
+    return tuple(cleaned)
+
+
+data = {}
+section = ()
+try:
+    with open(path, 'r', encoding='utf-8') as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped or stripped.startswith('#'):
+                continue
+            sec = SECTION_RE.match(line)
+            if sec:
+                section = parse_section(sec.group(1))
+                data.setdefault(section, {})
+                continue
+            key = KEY_RE.match(line)
+            if key and section:
+                data.setdefault(section, {})[key.group(1).replace('-', '_')] = parse_value(key.group(2))
+except OSError:
+    sys.exit(0)
+
+
+def emit(name, value):
+    if value is None or value == '':
+        return
+    print(f'{name}={shlex.quote(str(value))}')
+
+if mode == 'settings':
+    settings = data.get(('settings',), {})
+    mapping = {
+        'terminal_app': 'RRUNNER_TERMINAL_APP',
+        'keep_open': 'RRUNNER_KEEP_OPEN',
+        'remote_base': 'RRUNNER_REMOTE_BASE',
+        'remote_url': 'RRUNNER_REMOTE_URL',
+        'restore_url': 'RRUNNER_RESTORE_URL',
+        'handlers_dir': 'RRUNNER_HANDLERS_DIR',
+        'text_editor': 'RRUNNER_TEXT_EDITOR',
+        'code_editor': 'RRUNNER_CODE_EDITOR',
+        'markdown_previewer': 'RRUNNER_MARKDOWN_PREVIEWER',
+    }
+    for key, env_name in mapping.items():
+        emit(env_name, settings.get(key))
+elif mode == 'action':
+    action = data.get(('actions', wanted_action), {})
+    if action:
+        emit('RRUNNER_TOML_ACTION_FOUND', '1')
+        for key in ('type', 'app', 'runner', 'script', 'command'):
+            emit(f'RRUNNER_TOML_ACTION_{key.upper()}', action.get(key))
+PY
+}
+
+parse_legacy_config_exports() {
+  local file="$1"
+  /usr/bin/python3 - "$file" <<'PY'
+import ast, re, shlex, sys
+allowed = {
+    'RRUNNER_REMOTE_BASE', 'RRUNNER_REMOTE_URL', 'RRUNNER_RESTORE_URL',
+    'RRUNNER_HANDLERS_DIR', 'RRUNNER_TERMINAL_APP', 'RRUNNER_KEEP_OPEN'
+}
+for line in open(sys.argv[1], encoding='utf-8', errors='ignore'):
+    m = re.match(r'^\s*(RRUNNER_[A-Z0-9_]+)\s*=\s*(.*?)\s*(?:#.*)?$', line)
+    if not m or m.group(1) not in allowed:
+        continue
+    value = m.group(2).strip()
+    if value and value[0] in ('"', "'"):
+        try:
+            value = ast.literal_eval(value)
+        except Exception:
+            value = value.strip('"\'')
+    print(f'{m.group(1)}={shlex.quote(str(value))}')
+PY
+}
+
+# Load optional legacy shell config first for compatibility.
+# For safety, parse only allowlisted RRUNNER_* assignments by default.
 for cfg in "/etc/rrunner.conf" "$HOME/.config/rrunner/config"; do
   if [[ -f "$cfg" ]]; then
-    # shellcheck disable=SC1090
-    source "$cfg"
+    if [[ "${RRUNNER_ALLOW_LEGACY_SOURCE:-0}" == "1" ]]; then
+      # shellcheck disable=SC1090
+      source "$cfg"
+    else
+      eval "$(parse_legacy_config_exports "$cfg")"
+    fi
   fi
 done
+
+# Load the preferred single-file TOML config last so it wins.
+if [[ -f "$RRUNNER_CONFIG_TOML" ]]; then
+  eval "$(parse_toml_exports settings "$RRUNNER_CONFIG_TOML")"
+fi
+RRUNNER_RESTORE_URL="${RRUNNER_RESTORE_URL:-$RRUNNER_REMOTE_BASE/bin/md-restore.sh}"
 
 notify() {
   /usr/bin/osascript - "$1" <<'APPLESCRIPT' >/dev/null 2>&1 || true
@@ -102,6 +261,21 @@ quote_for_shell() {
 import sys, shlex
 print(shlex.quote(sys.argv[1]))
 PY
+}
+
+expand_path() {
+  /usr/bin/python3 - "$1" <<'PY'
+import os
+import sys
+print(os.path.expandvars(os.path.expanduser(sys.argv[1])))
+PY
+}
+
+configured_env_exports() {
+  printf 'export RRUNNER_ACTION=%s\n' "$(quote_for_shell "$ACTION")"
+  printf 'export RRUNNER_URL=%s\n' "$(quote_for_shell "$RAW_URL")"
+  printf 'export RRUNNER_PATH=%s\n' "$(quote_for_shell "$PATH_PAYLOAD")"
+  printf 'export RRUNNER_APP=%s\n' "$(quote_for_shell "$APP_PAYLOAD")"
 }
 
 require_payload() {
@@ -243,9 +417,139 @@ auto_run() {
   esac
 }
 
+validate_runner() {
+  local runner="$1"
+  case "$runner" in
+    osascript|bash|zsh|python|node|ruby|perl) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+run_configured_script() {
+  local script="$1"
+  local runner="${2:-}"
+  script="$(expand_path "$script")"
+
+  if [[ ! -e "$script" ]]; then
+    alert "Configured script does not exist: $script"
+    exit 1
+  fi
+
+  if [[ -n "$runner" ]] && ! validate_runner "$runner"; then
+    alert "Configured action '$ACTION' has unsupported script runner: $runner"
+    exit 1
+  fi
+
+  local script_q path_arg env_exports command_line
+  script_q="$(quote_for_shell "$script")"
+  path_arg=""
+  if [[ -n "$PATH_PAYLOAD" ]]; then
+    path_arg=" $(quote_for_shell "$PATH_PAYLOAD")"
+  fi
+  env_exports="$(configured_env_exports)"
+
+  if [[ -n "$runner" ]]; then
+    command_line="$runner $script_q$path_arg"
+  else
+    command_line="$script_q$path_arg"
+  fi
+
+  run_command_in_terminal "$env_exports
+$command_line"
+}
+
+run_configured_command() {
+  local cmd="$1"
+  local env_exports
+  env_exports="$(configured_env_exports)"
+  notify "Running configured command for rrunner://$ACTION"
+  run_command_in_terminal "$env_exports
+$cmd"
+}
+
+run_toml_action_if_present() {
+  RRUNNER_TOML_ACTION_FOUND=""
+  RRUNNER_TOML_ACTION_TYPE=""
+  RRUNNER_TOML_ACTION_APP=""
+  RRUNNER_TOML_ACTION_RUNNER=""
+  RRUNNER_TOML_ACTION_SCRIPT=""
+  RRUNNER_TOML_ACTION_COMMAND=""
+
+  if [[ -f "$RRUNNER_CONFIG_TOML" ]]; then
+    eval "$(parse_toml_exports action "$RRUNNER_CONFIG_TOML" "$ACTION")"
+  fi
+
+  [[ "$RRUNNER_TOML_ACTION_FOUND" == "1" ]] || return 0
+
+  local type app runner script command
+  type="$(printf '%s' "$RRUNNER_TOML_ACTION_TYPE" | tr '[:upper:]' '[:lower:]')"
+  app="${RRUNNER_TOML_ACTION_APP:-$APP_PAYLOAD}"
+  runner="$RRUNNER_TOML_ACTION_RUNNER"
+  script="$RRUNNER_TOML_ACTION_SCRIPT"
+  command="$RRUNNER_TOML_ACTION_COMMAND"
+
+  case "$type" in
+    open)
+      require_payload
+      open "$PATH_PAYLOAD"
+      ;;
+    reveal|show)
+      require_payload
+      open -R "$PATH_PAYLOAD"
+      ;;
+    openwith|view)
+      require_payload
+      open_app_with_file "$app" "$PATH_PAYLOAD"
+      ;;
+    launch)
+      launch_app "$app"
+      ;;
+    auto)
+      require_payload
+      auto_run "$PATH_PAYLOAD"
+      ;;
+    restore)
+      require_payload
+      restore_md "$PATH_PAYLOAD"
+      ;;
+    run)
+      require_payload
+      if [[ -z "$runner" ]]; then
+        alert "Configured action '$ACTION' has type=run but no runner."
+        exit 1
+      fi
+      if ! validate_runner "$runner"; then
+        alert "Configured action '$ACTION' has unsupported runner: $runner"
+        exit 1
+      fi
+      run_with "$runner" "$PATH_PAYLOAD"
+      ;;
+    script)
+      if [[ -z "$script" ]]; then
+        alert "Configured action '$ACTION' has type=script but no script."
+        exit 1
+      fi
+      run_configured_script "$script" "$runner"
+      ;;
+    command)
+      if [[ -z "$command" ]]; then
+        alert "Configured action '$ACTION' has type=command but no command."
+        exit 1
+      fi
+      run_configured_command "$command"
+      ;;
+    *)
+      alert "Configured action '$ACTION' has unknown type: $type"
+      exit 1
+      ;;
+  esac
+
+  exit 0
+}
+
 run_custom_handler_if_present() {
   local action="$1"
-  local handler="$RRUNNER_HANDLERS_DIR/$action"
+  local handler="$(expand_path "$RRUNNER_HANDLERS_DIR")/$action"
 
   if [[ -x "$handler" ]]; then
     export RRUNNER_ACTION="$action"
@@ -261,7 +565,10 @@ ACTION="$(action_from_url)"
 PATH_PAYLOAD="$(payload_path)"
 APP_PAYLOAD="$(query_value app)"
 
-# Custom local handlers can override or add actions.
+# Preferred TOML config actions can override or add actions.
+run_toml_action_if_present
+
+# Legacy executable handlers can override or add actions.
 run_custom_handler_if_present "$ACTION"
 
 case "$ACTION" in

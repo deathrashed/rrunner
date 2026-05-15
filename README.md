@@ -34,15 +34,24 @@ The installer creates:
 ```text
 /Applications/Rrunner.app
 ~/.local/bin/rrunner
+~/.local/lib/rrunner/rrunner-core
 ```
 
-`Rrunner.app` is the local macOS URL handler. The command-line bridge at `~/.local/bin/rrunner` fetches the latest runner logic from this repo.
+`Rrunner.app` is the local macOS URL handler. The command-line bridge at `~/.local/bin/rrunner` now prefers the local Go core backend for plugin/config dispatch, with the shell runner kept as a fallback. Set `RRUNNER_DISABLE_GO_CORE=1` to force the legacy shell fallback.
 
 ## Test
 
 ```bash
+make validate
 open 'rrunner://open?url=file:///Users/rd/Scripts/Riley/rrunner/README.md'
 open 'rrunner://launch?app=Ghostty'
+rrunner --list-actions
+rrunner --list-actions --markdown --agent-notes
+rrunner --explain-action open --markdown
+rrunner --print-url open README.md --markdown-link "Open README"
+rrunner --dry-run 'rrunner://open?url=file:///Users/rd/Scripts/Riley/rrunner/README.md'
+rrunner --diagnose
+./install.sh --dry-run
 ```
 
 ## Repo layout
@@ -50,22 +59,29 @@ open 'rrunner://launch?app=Ghostty'
 ```text
 rrunner/
 ├── README.md
+├── gemini.md            # AI/developer repository briefing
+├── go.mod
+├── Makefile             # local validation targets
 ├── install.sh
+├── cmd/
+│   └── rrunner-core/    # primary Go backend for config/plugins/actions
 ├── bin/
 │   ├── rrunner          # tiny local bridge used by Rrunner.app
-│   ├── rrunner.sh       # public runner logic fetched by the bridge
+│   ├── rrunner.sh       # legacy shell fallback when Go core is disabled/missing
 │   └── md-restore.sh    # restore embedded Base64 originals from Markdown wrappers
 ├── app/
 │   ├── Rrunner.applescript
 │   ├── Rrunner.icns
 │   └── rrunner-icon.png
 ├── config/
-│   └── rrunner.conf.example
+│   ├── rrunner.config.toml.example
+│   └── rrunner.conf.example      # legacy shell config example
 ├── docs/
 │   ├── CONFIGURATION-AND-EXTENDING.md
 │   └── URL-SCHEMES.md
 └── examples/
-    └── markdown-links.md
+    ├── markdown-links.md
+    └── plugins/        # example plugin manifests
 ```
 
 ## Supported URL actions
@@ -92,51 +108,100 @@ Create:
 
 ```bash
 mkdir -p ~/.config/rrunner
-cp config/rrunner.conf.example ~/.config/rrunner/config
+cp config/rrunner.config.toml.example ~/.config/rrunner/config.toml
 ```
 
 Then edit:
 
 ```bash
-nano ~/.config/rrunner/config
+nano ~/.config/rrunner/config.toml
 ```
 
 Common settings:
 
-```bash
-RRUNNER_TERMINAL_APP="Ghostty"
-RRUNNER_KEEP_OPEN=1
-RRUNNER_REMOTE_BASE="https://raw.githubusercontent.com/deathrashed/rrunner/main"
-RRUNNER_HANDLERS_DIR="$HOME/.config/rrunner/handlers"
+```toml
+[settings]
+terminal_app = "Ghostty"
+keep_open = true
+remote_base = "https://raw.githubusercontent.com/deathrashed/rrunner/main"
+handlers_dir = "~/.config/rrunner/handlers"
 ```
 
 See [docs/CONFIGURATION-AND-EXTENDING.md](docs/CONFIGURATION-AND-EXTENDING.md).
 
 ## Extend
 
-Add custom handlers in:
+Add custom actions to `~/.config/rrunner/config.toml`:
 
-```text
-~/.config/rrunner/handlers/
-```
+```toml
+[actions.edit]
+type = "openwith"
+description = "Open a file in CotEditor."
+app = "com.coteditor.CotEditor"
 
-For example:
+[actions.preview]
+type = "openwith"
+description = "Preview Markdown in Marked."
+app = "com.brettterpstra.marked2"
 
-```bash
-mkdir -p ~/.config/rrunner/handlers
-cat > ~/.config/rrunner/handlers/open-project <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-open -a "Visual Studio Code" "$RRUNNER_PATH"
-EOF
-chmod +x ~/.config/rrunner/handlers/open-project
+[actions.run-zsh]
+type = "run"
+description = "Run the URL payload as a zsh script."
+runner = "zsh"
+confirm = true
+
+[actions.project-build]
+type = "script"
+description = "Run the project build script."
+script = "~/Scripts/build-project.zsh"
+confirm = true
+
+# WARNING: command actions run shell text from this file.
+# Use single quotes around shell commands so inner "double quotes" need no escaping.
+[actions.quick-command]
+type = "command"
+description = "Print request context."
+command = 'echo "Path: $RRUNNER_PATH"'
+confirm = true
 ```
 
 Then use:
 
 ```md
-[Open Project](<rrunner://open-project?url=file:///Users/rd/Projects/my-project>)
+[Edit](<rrunner://edit?url=file:///Users/rd/Notes/example.md>)
+[Preview](<rrunner://preview?url=file:///Users/rd/Notes/example.md>)
+[Build](<rrunner://project-build?url=file:///Users/rd/Projects/my-project>)
 ```
+
+Executable handlers in `~/.config/rrunner/handlers/` are still supported as a fallback for advanced cases.
+
+Built-in actions belong in the Go core (`cmd/rrunner-core/main.go`). The Bash runner is a compatibility fallback only; do not add new primary behavior there unless you are explicitly changing fallback behavior.
+
+## Plugins and diagnostics
+
+The Go core supports manifest plugins in:
+
+```text
+~/.config/rrunner/plugins/*.plugin.toml
+~/.config/rrunner/plugins/*/plugin.toml
+```
+
+Useful backend commands:
+
+```bash
+rrunner --list-actions
+rrunner --list-actions --json
+rrunner --list-actions --markdown --agent-notes
+rrunner --export-actions docs/ACTIONS.generated.md --agent-notes
+rrunner --explain-action edit --markdown
+rrunner --print-url edit README.md --markdown-link "Edit README"
+rrunner --dry-run 'rrunner://edit?url=file:///path/to/file.md'
+rrunner --diagnose
+```
+
+The repo includes example plugin manifests in `examples/plugins/basic-workflow/` and `examples/plugins/riley-workflow/`.
+
+Plugin `command` actions are blocked by default unless enabled and trusted in `config.toml`; inline commands in your own config remain allowed.
 
 ## Markdown wrapper restore
 

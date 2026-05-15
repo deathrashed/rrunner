@@ -43,7 +43,7 @@ flowchart TD
   * `app/` — AppleScript app source, icon, and plist example for registering `rrunner://` with macOS.
   * `config/` — example configs: new `rrunner.config.toml.example` and legacy `rrunner.conf.example`.
   * `docs/` — configuration/extension guide and URL scheme examples.
-  * `examples/` — Markdown link examples.
+  * `examples/` — Markdown link examples and plugin manifest examples.
 * **Key Entry Points:**
   * Runtime URL entry: `app/Rrunner.applescript` `on open location thisURL` → `/Users/rd/.local/bin/rrunner`.
   * Bridge entry: `bin/rrunner`.
@@ -131,7 +131,7 @@ flowchart TD
   * Do not edit generated installed artifacts directly as source of truth: `/Applications/Rrunner.app`, `~/.local/bin/rrunner`, `~/.local/lib/rrunner/rrunner-core`, or cache files under `~/Library/Caches/Rrunner`. Update repo files and rerun `install.sh` or rebuild/install intentionally.
 * **Secrets Management & Security:**
   * No repo-local `.env` or secrets management file is defined. Do not introduce credentials into the repo.
-  * Treat `command` actions as high-risk. Inline commands in the main local config are allowed; plugin `command` actions are blocked unless `allow_plugin_commands = true` and, by default, the plugin id is trusted.
+  * Treat `command`, `script`, runner, and legacy-handler actions as high-risk executable actions. Inline commands in the main local config are allowed; plugin `command` actions are blocked unless `allow_plugin_commands = true` and, by default, the plugin id is trusted. Prefer `confirm = true` for executable actions exposed in Markdown.
   * Do not reintroduce unconditional `source "$cfg"` behavior for legacy shell config. The bridge and fallback now parse allowlisted `RRUNNER_*` assignments unless `RRUNNER_ALLOW_LEGACY_SOURCE=1` is explicitly set.
   * Do not template-expand untrusted payload values into shell command strings. The current model passes request data through environment variables such as `RRUNNER_ACTION`, `RRUNNER_URL`, `RRUNNER_PATH`, `RRUNNER_APP`, `RRUNNER_PLUGIN_ID`, and `RRUNNER_PLUGIN_DIR`.
 * **Preservation Mandates:**
