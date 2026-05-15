@@ -1,0 +1,85 @@
+# Rrunner TOML configuration example
+# Copy to: ~/.config/rrunner/config.toml
+
+[settings]
+# Which terminal app Rrunner should use for script and command execution.
+terminal_app = "Ghostty"
+
+# Keep terminal windows open after commands finish.
+# true = wait for Return, false = exit immediately.
+keep_open = true
+
+# Raw GitHub base URL used by the bridge and restore runner.
+remote_base = "https://raw.githubusercontent.com/deathrashed/rrunner/main"
+
+# Optional override for the public runner and restore scripts.
+remote_url = "https://raw.githubusercontent.com/deathrashed/rrunner/main/bin/rrunner.sh"
+restore_url = "https://raw.githubusercontent.com/deathrashed/rrunner/main/bin/md-restore.sh"
+
+# Legacy executable handlers still work. TOML actions are tried first.
+handlers_dir = "~/.config/rrunner/handlers"
+
+# Optional default editor apps for generated links/documentation.
+text_editor = "com.coteditor.CotEditor"
+code_editor = "com.microsoft.VSCode"
+markdown_previewer = "com.brettterpstra.marked2"
+
+[plugins]
+enabled = true
+dirs = [
+  "~/.config/rrunner/plugins",
+  "~/.local/share/rrunner/plugins"
+]
+disabled = []
+trusted = []
+
+[security]
+allow_inline_commands = true
+allow_plugin_commands = false
+require_trusted_plugins_for_commands = true
+allow_legacy_handlers = true
+
+[logging]
+level = "info"
+file = "~/Library/Logs/Rrunner/rrunner.log"
+
+# Custom URL actions live under [actions.<call-name>].
+# Use them as: rrunner://<call-name>?url=file:///path/to/file
+
+[actions.edit]
+type = "openwith"
+description = "Open the URL payload in CotEditor."
+app = "com.coteditor.CotEditor"
+
+[actions.preview]
+type = "openwith"
+description = "Preview Markdown in Marked."
+app = "com.brettterpstra.marked2"
+
+[actions.finder]
+type = "reveal"
+description = "Reveal the URL payload in Finder."
+
+[actions.run-zsh]
+type = "run"
+description = "Run the URL payload as a zsh script."
+runner = "zsh"
+confirm = true
+
+[actions.project-build]
+type = "script"
+description = "Run a trusted local project build script."
+script = "~/Scripts/build-project.zsh"
+confirm = true
+# Optional: force a runner instead of executing the script directly.
+# runner = "zsh"
+
+# WARNING: command actions run shell text from this file in a terminal.
+# Only use commands you wrote and trust.
+# Tip: use TOML single-quoted strings for shell commands so you can type
+# normal double quotes without escaping them.
+[actions.quick-command]
+type = "command"
+description = "Print the request environment in a terminal."
+command = 'echo "Path: $RRUNNER_PATH"; echo "URL: $RRUNNER_URL"'
+confirm = true

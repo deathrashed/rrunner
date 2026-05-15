@@ -1,0 +1,33 @@
+[plugin]
+id = "basic.workflow"
+name = "Basic Workflow"
+version = "0.1.0"
+enabled = true
+
+[actions.basic-readme]
+type = "open"
+description = "Open a file path passed in the URL."
+path_policy = "exists"
+
+[actions.basic-edit]
+type = "openwith"
+description = "Open a file in CotEditor."
+app = "com.coteditor.CotEditor"
+path_policy = "file"
+
+[actions.basic-script]
+type = "script"
+description = "Run a trusted local script with the URL path as an argument."
+script = "~/Scripts/example.zsh"
+runner = "zsh"
+confirm = true
+path_policy = "any"
+
+# Command actions are intentionally blocked for plugins unless the plugin is trusted
+# and plugin commands are enabled in ~/.config/rrunner/config.toml.
+[actions.basic-command]
+type = "command"
+description = "Example command action; keep confirm=true for executable actions."
+command = 'echo "RRUNNER_PATH=$RRUNNER_PATH"'
+confirm = true
+path_policy = "any"

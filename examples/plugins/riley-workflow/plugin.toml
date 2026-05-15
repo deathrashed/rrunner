@@ -1,0 +1,65 @@
+[plugin]
+id = "riley.workflow"
+name = "Riley Workflow"
+version = "0.1.0"
+enabled = true
+
+[actions.kb]
+type = "command"
+description = "Open the Typinator knowledge-base Includes folder."
+command = 'open "/Users/rd/.config/typinator/Sets/Includes/Text/KB"'
+path_policy = "none"
+
+[actions.kb-agents]
+type = "command"
+description = "Open the KB AGENTS.md context file."
+command = 'open "/Users/rd/.config/typinator/Sets/Includes/Text/KB/AGENTS.md"'
+path_policy = "none"
+
+[actions.typinator]
+type = "command"
+description = "Open Typinator configuration."
+command = 'open "/Users/rd/.config/typinator"'
+path_policy = "none"
+
+[actions.scripts]
+type = "command"
+description = "Open Riley scripts folder."
+command = 'open "/Users/rd/Scripts"'
+path_policy = "none"
+
+[actions.script-hub]
+type = "script"
+description = "Launch the local Scripts hub."
+script = "/Users/rd/Scripts/.hub/script-hub.sh"
+runner = "zsh"
+confirm = true
+path_policy = "none"
+
+[actions.rrunner-repo]
+type = "command"
+description = "Open this Rrunner repository."
+command = 'open "/Users/rd/Scripts/Riley/rrunner"'
+path_policy = "none"
+
+[actions.rrunner-config]
+type = "command"
+description = "Open the live Rrunner TOML config."
+command = 'open "$HOME/.config/rrunner/config.toml"'
+path_policy = "none"
+
+[actions.karabiner-config]
+type = "command"
+description = "Open Karabiner config."
+command = 'open "$HOME/.config/karabiner"'
+path_policy = "none"
+
+[actions.ghostty-config]
+type = "command"
+description = "Open Ghostty config."
+command = 'open "$HOME/.config/ghostty"'
+path_policy = "none"
+
+# This plugin intentionally uses local absolute paths. Copy it into
+# ~/.config/rrunner/plugins/riley-workflow/plugin.toml and edit paths first.
+# Command actions require allow_plugin_commands=true and a trusted plugin id.
