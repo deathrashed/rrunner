@@ -36,6 +36,118 @@ runner = "zsh"
 confirm = true
 path_policy = "none"
 
+[actions.finder-scpt-to-applescript]
+type = "script"
+description = "Convert Finder-selected .scpt files to decompiled .applescript files beside the originals."
+script = "scripts/finder-convert.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.finder-files-to-md]
+type = "script"
+description = "Convert Finder-selected files/folders to Markdown wrappers with Rrunner action links and restore payloads."
+script = "scripts/finder-convert.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.finder-image-to-icns]
+type = "script"
+description = "Convert Finder-selected images to .icns files beside the originals."
+script = "scripts/finder-convert.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.finder-image-to-svg]
+type = "script"
+description = "Convert Finder-selected PNG/JPEG images to black-and-white SVG vectors with OpenCV and potrace."
+script = "scripts/finder-convert.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.finder-audio-to-mp3]
+type = "script"
+description = "Convert Finder-selected FLAC/WAV/M4A files or folders to MP3 using XLD or ffmpeg."
+script = "scripts/finder-convert.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.finder-video-to-mkv]
+type = "script"
+description = "Convert Finder-selected video files or folders to MKV using mkvmerge/MKVToolNix."
+script = "scripts/finder-convert.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.riley-audit-scripts]
+type = "script"
+description = "Run the local Raycast script audit helper."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/audit-scripts.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.riley-download-audio]
+type = "script"
+description = "Download the clipboard URL as MP3 using the Riley yt-dlp helper."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/download-audio-mp3.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.riley-download-video]
+type = "script"
+description = "Download the clipboard URL as a best-quality video using the Riley yt-dlp helper."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/download-video-best.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.riley-organize-downloads]
+type = "script"
+description = "Organize files in ~/Downloads by type."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/file-organize-downloads.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.riley-clean-filenames]
+type = "script"
+description = "Clean filenames in the current Finder window."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/file-clean-filenames.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.riley-system-info]
+type = "script"
+description = "Show the local Riley system-info report."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/system-info.sh"
+runner = "bash"
+confirm = true
+path_policy = "none"
+
+[actions.riley-clipboard-to-md]
+type = "script"
+description = "Convert clipboard text to Markdown using the Riley/Raycast helper."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/clipboard-to-markdown.js"
+runner = "node"
+confirm = true
+path_policy = "none"
+
+[actions.riley-ai-search]
+type = "script"
+description = "Search clipboard text across AI search tools."
+script = "/Users/rd/Scripts/Apps/Automation/Raycast/-riley/web-search-ai.py"
+runner = "python"
+confirm = true
+path_policy = "none"
+
 [actions.rrunner-repo]
 type = "command"
 description = "Open this Rrunner repository."

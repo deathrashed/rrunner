@@ -16,7 +16,7 @@ build:
 	go build -o $(CORE_OUT) ./cmd/rrunner-core
 
 shell-syntax:
-	bash -n bin/rrunner bin/rrunner.sh install.sh bin/md-restore.sh
+	bash -n bin/rrunner bin/rrunner.sh install.sh bin/md-restore.sh examples/plugins/riley-workflow/scripts/finder-convert.sh
 
 dry-run: build
 	$(CORE_OUT) --validate-install --json

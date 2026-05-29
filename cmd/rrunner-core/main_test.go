@@ -139,6 +139,34 @@ command = 'echo nope'
 	}
 }
 
+func TestRileyWorkflowPluginHooksFinderConversions(t *testing.T) {
+	pluginPath := filepath.Join("..", "..", "examples", "plugins", "riley-workflow", "plugin.toml")
+	manifest, ok := loadPluginManifest(pluginPath)
+	if !ok {
+		t.Fatalf("could not load plugin manifest: %#v", manifest.Errors)
+	}
+	want := map[string]string{
+		"finder-scpt-to-applescript": "scripts/finder-convert.sh",
+		"finder-files-to-md":         "scripts/finder-convert.sh",
+		"finder-image-to-icns":       "scripts/finder-convert.sh",
+		"finder-image-to-svg":        "scripts/finder-convert.sh",
+		"finder-audio-to-mp3":        "scripts/finder-convert.sh",
+		"finder-video-to-mkv":        "scripts/finder-convert.sh",
+	}
+	for name, script := range want {
+		spec, ok := manifest.Actions[name]
+		if !ok {
+			t.Fatalf("missing action %s", name)
+		}
+		if spec.Type != "script" || spec.Script != script || spec.Runner != "bash" || spec.PathPolicy != "none" {
+			t.Fatalf("bad action %s: %#v", name, spec)
+		}
+		if _, err := os.Stat(filepath.Join(manifest.Dir, script)); err != nil {
+			t.Fatalf("script for %s does not exist: %v", name, err)
+		}
+	}
+}
+
 func TestDryRunPlanOpenWith(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "README.md")
