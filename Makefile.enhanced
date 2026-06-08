@@ -1,0 +1,370 @@
+# Enhanced Makefile for Rrunner
+.PHONY: all build test clean fmt lint vet check install run dev server \
+        docker docker-build docker-run \
+        release release-darwin release-linux release-windows \
+        docs benchmark profile coverage \
+        validate-enhanced dry-run-enhanced diagnose-enhanced \
+        install-tools setup-dev ci cd \
+        help
+
+# Configuration
+VERSION ?= 0.3.0-enhanced
+BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GO_VERSION := $(shell go version | awk '{print $$3}')
+
+# Build settings
+BINARY_NAME := rrunner-enhanced
+CORE_OUT ?= ./bin/$(BINARY_NAME)
+LEGACY_CORE_OUT ?= ./bin/rrunner-core
+PKG := github.com/deathrashed/rrunner
+LDFLAGS := -X main.version=$(VERSION) \
+           -X main.buildTime=$(BUILD_TIME) \
+           -X main.gitCommit=$(GIT_COMMIT) \
+           -X main.goVersion=$(GO_VERSION)
+
+# Directories
+BIN_DIR := ./bin
+BUILD_DIR := ./build
+DIST_DIR := ./dist
+DOCS_DIR := ./docs
+EXAMPLES_DIR := ./examples
+
+# Test settings
+TEST_TIMEOUT := 30s
+COVERAGE_DIR := ./coverage
+COVERAGE_FILE := $(COVERAGE_DIR)/coverage.out
+COVERAGE_HTML := $(COVERAGE_DIR)/coverage.html
+
+# Docker settings
+DOCKER_IMAGE := rrunner-enhanced
+DOCKER_TAG := $(VERSION)
+
+# Colors for output
+RED := \033[31m
+GREEN := \033[32m
+YELLOW := \033[33m
+BLUE := \033[34m
+MAGENTA := \033[35m
+CYAN := \033[36m
+RESET := \033[0m
+
+## Default target
+all: clean fmt lint vet test build
+
+## Help
+help: ## Show this help message
+	@echo '$(CYAN)Rrunner Enhanced Build System$(RESET)'
+	@echo 'Version: $(VERSION)'
+	@echo ''
+	@echo '$(YELLOW)Available targets:$(RESET)'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-20s$(RESET) %s\n", $$1, $$2}'
+
+## Development
+dev: ## Set up development environment
+	@echo '$(BLUE)Setting up development environment...$(RESET)'
+	$(MAKE) install-tools
+	$(MAKE) setup-dev
+	@echo '$(GREEN)Development environment ready!$(RESET)'
+
+setup-dev: ## Initialize development configuration
+	@echo '$(BLUE)Creating development directories...$(RESET)'
+	@mkdir -p $(BIN_DIR) $(BUILD_DIR) $(DIST_DIR) $(COVERAGE_DIR)
+	@mkdir -p ~/.config/rrunner/plugins ~/.config/rrunner/handlers
+	@echo '$(BLUE)Copying example configurations...$(RESET)'
+	@cp -n config/rrunner.config.toml.example ~/.config/rrunner/config.toml 2>/dev/null || true
+	@echo '$(GREEN)Development setup complete!$(RESET)'
+
+install-tools: ## Install development tools
+	@echo '$(BLUE)Installing development tools...$(RESET)'
+	go install golang.org/x/tools/cmd/goimports@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install golang.org/x/tools/cmd/godoc@latest
+	go install github.com/securecodewarrior/sast-scan@latest
+	@echo '$(GREEN)Tools installed!$(RESET)'
+
+## Building
+build: ## Build the enhanced binary
+	@echo '$(BLUE)Building $(BINARY_NAME)...$(RESET)'
+	@mkdir -p $(BIN_DIR)
+	go build -ldflags "$(LDFLAGS)" -o $(CORE_OUT) ./cmd/rrunner-enhanced
+	@echo '$(GREEN)Built $(CORE_OUT)$(RESET)'
+
+build-legacy: ## Build the legacy core binary
+	@echo '$(BLUE)Building legacy rrunner-core...$(RESET)'
+	@mkdir -p $(BIN_DIR)
+	go build -o $(LEGACY_CORE_OUT) ./cmd/rrunner-core
+	@echo '$(GREEN)Built $(LEGACY_CORE_OUT)$(RESET)'
+
+build-all: build build-legacy ## Build both enhanced and legacy binaries
+
+## Testing
+test: ## Run all tests
+	@echo '$(BLUE)Running tests...$(RESET)'
+	go test -timeout $(TEST_TIMEOUT) -race -v ./...
+	@echo '$(GREEN)Tests passed!$(RESET)'
+
+test-enhanced: ## Run tests for enhanced packages only
+	@echo '$(BLUE)Running enhanced package tests...$(RESET)'
+	go test -timeout $(TEST_TIMEOUT) -race -v ./internal/...
+	@echo '$(GREEN)Enhanced tests passed!$(RESET)'
+
+test-coverage: ## Run tests with coverage
+	@echo '$(BLUE)Running tests with coverage...$(RESET)'
+	@mkdir -p $(COVERAGE_DIR)
+	go test -timeout $(TEST_TIMEOUT) -race -coverprofile=$(COVERAGE_FILE) ./...
+	go tool cover -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML)
+	go tool cover -func=$(COVERAGE_FILE) | tail -1
+	@echo '$(GREEN)Coverage report generated: $(COVERAGE_HTML)$(RESET)'
+
+test-integration: build ## Run integration tests
+	@echo '$(BLUE)Running integration tests...$(RESET)'
+	./test/integration/run-tests.sh
+	@echo '$(GREEN)Integration tests passed!$(RESET)'
+
+benchmark: ## Run benchmarks
+	@echo '$(BLUE)Running benchmarks...$(RESET)'
+	go test -bench=. -benchmem ./...
+
+profile: build ## Generate CPU and memory profiles
+	@echo '$(BLUE)Generating profiles...$(RESET)'
+	@mkdir -p ./profiles
+	$(CORE_OUT) --cpuprofile=./profiles/cpu.prof --memprofile=./profiles/mem.prof --server &
+	sleep 5
+	curl -s http://localhost:8080/health > /dev/null
+	pkill -f $(BINARY_NAME) || true
+	@echo '$(GREEN)Profiles generated in ./profiles/$(RESET)'
+
+## Code Quality
+fmt: ## Format code
+	@echo '$(BLUE)Formatting code...$(RESET)'
+	gofmt -w .
+	goimports -w .
+	@echo '$(GREEN)Code formatted!$(RESET)'
+
+lint: ## Run linter
+	@echo '$(BLUE)Running linter...$(RESET)'
+	golangci-lint run ./...
+	@echo '$(GREEN)Linting passed!$(RESET)'
+
+vet: ## Run go vet
+	@echo '$(BLUE)Running go vet...$(RESET)'
+	go vet ./...
+	@echo '$(GREEN)Vet passed!$(RESET)'
+
+check: fmt lint vet ## Run all code quality checks
+
+security-scan: ## Run security analysis
+	@echo '$(BLUE)Running security scan...$(RESET)'
+	gosec ./...
+	@echo '$(GREEN)Security scan complete!$(RESET)'
+
+## Validation
+validate-enhanced: build ## Run enhanced validation
+	@echo '$(BLUE)Running enhanced validation...$(RESET)'
+	$(CORE_OUT) --validate-install --output json
+	$(CORE_OUT) --list-actions
+	$(CORE_OUT) --health
+	@echo '$(GREEN)Enhanced validation passed!$(RESET)'
+
+dry-run-enhanced: build ## Run dry-run tests with enhanced binary
+	@echo '$(BLUE)Running enhanced dry-run tests...$(RESET)'
+	$(CORE_OUT) --dry-run 'rrunner://open?url=file:///$(PWD)/README.md'
+	$(CORE_OUT) --dry-run 'rrunner://list-actions'
+	@echo '$(GREEN)Dry-run tests passed!$(RESET)'
+
+diagnose-enhanced: build ## Run enhanced diagnostics
+	@echo '$(BLUE)Running enhanced diagnostics...$(RESET)'
+	$(CORE_OUT) --diagnose --output json
+	@echo '$(GREEN)Diagnostics complete!$(RESET)'
+
+## Running
+run: build ## Run the enhanced binary
+	$(CORE_OUT) $(ARGS)
+
+server: build ## Start in server mode
+	@echo '$(BLUE)Starting server mode...$(RESET)'
+	$(CORE_OUT) --server --host localhost --port 8080 --log-level debug
+
+daemon: build ## Start as background daemon
+	@echo '$(BLUE)Starting daemon mode...$(RESET)'
+	nohup $(CORE_OUT) --server --host 0.0.0.0 --port 8080 > rrunner.log 2>&1 &
+	@echo '$(GREEN)Daemon started (PID: $$!)$(RESET)'
+
+## Docker
+docker-build: ## Build Docker image
+	@echo '$(BLUE)Building Docker image...$(RESET)'
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_IMAGE):latest
+	@echo '$(GREEN)Docker image built!$(RESET)'
+
+docker-run: docker-build ## Run Docker container
+	@echo '$(BLUE)Running Docker container...$(RESET)'
+	docker run -p 8080:8080 --rm $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+docker-push: docker-build ## Push Docker image
+	@echo '$(BLUE)Pushing Docker image...$(RESET)'
+	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
+	docker push $(DOCKER_IMAGE):latest
+
+## Release
+release: ## Build release binaries for all platforms
+	@echo '$(BLUE)Building release binaries...$(RESET)'
+	$(MAKE) release-darwin
+	$(MAKE) release-linux  
+	$(MAKE) release-windows
+	@echo '$(GREEN)Release binaries built in $(DIST_DIR)$(RESET)'
+
+release-darwin: ## Build macOS releases
+	@echo '$(BLUE)Building macOS releases...$(RESET)'
+	@mkdir -p $(DIST_DIR)
+	GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/rrunner-enhanced
+	GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/rrunner-enhanced
+	@echo '$(GREEN)macOS binaries built!$(RESET)'
+
+release-linux: ## Build Linux releases
+	@echo '$(BLUE)Building Linux releases...$(RESET)'
+	@mkdir -p $(DIST_DIR)
+	GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/rrunner-enhanced
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/rrunner-enhanced
+	@echo '$(GREEN)Linux binaries built!$(RESET)'
+
+release-windows: ## Build Windows releases
+	@echo '$(BLUE)Building Windows releases...$(RESET)'
+	@mkdir -p $(DIST_DIR)
+	GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/rrunner-enhanced
+	GOOS=windows GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-windows-arm64.exe ./cmd/rrunner-enhanced
+	@echo '$(GREEN)Windows binaries built!$(RESET)'
+
+package: release ## Create release packages
+	@echo '$(BLUE)Creating release packages...$(RESET)'
+	@mkdir -p $(DIST_DIR)/packages
+	cd $(DIST_DIR) && \
+	for binary in $(BINARY_NAME)-*; do \
+		if [[ $$binary == *.exe ]]; then \
+			zip -q packages/$${binary%.exe}.zip $$binary README.md LICENSE; \
+		else \
+			tar -czf packages/$$binary.tar.gz $$binary README.md LICENSE; \
+		fi; \
+	done
+	@echo '$(GREEN)Release packages created in $(DIST_DIR)/packages$(RESET)'
+
+## Documentation
+docs: ## Generate documentation
+	@echo '$(BLUE)Generating documentation...$(RESET)'
+	@mkdir -p $(DOCS_DIR)/api
+	godoc -http=:6060 &
+	sleep 2
+	curl -s http://localhost:6060/pkg/$(PKG)/ > $(DOCS_DIR)/api/index.html
+	pkill godoc || true
+	@echo '$(GREEN)Documentation generated in $(DOCS_DIR)$(RESET)'
+
+docs-serve: ## Serve documentation locally
+	@echo '$(BLUE)Serving documentation on http://localhost:6060$(RESET)'
+	godoc -http=:6060
+
+## Installation
+install: build ## Install the enhanced binary
+	@echo '$(BLUE)Installing $(BINARY_NAME)...$(RESET)'
+	@mkdir -p ~/.local/bin ~/.local/lib/rrunner
+	cp $(CORE_OUT) ~/.local/bin/$(BINARY_NAME)
+	cp $(CORE_OUT) ~/.local/lib/rrunner/rrunner-enhanced
+	chmod +x ~/.local/bin/$(BINARY_NAME)
+	@echo '$(GREEN)$(BINARY_NAME) installed to ~/.local/bin/$(RESET)'
+
+install-global: build ## Install globally (requires sudo)
+	@echo '$(BLUE)Installing $(BINARY_NAME) globally...$(RESET)'
+	sudo cp $(CORE_OUT) /usr/local/bin/$(BINARY_NAME)
+	sudo chmod +x /usr/local/bin/$(BINARY_NAME)
+	@echo '$(GREEN)$(BINARY_NAME) installed to /usr/local/bin/$(RESET)'
+
+uninstall: ## Uninstall the binary
+	@echo '$(BLUE)Uninstalling $(BINARY_NAME)...$(RESET)'
+	rm -f ~/.local/bin/$(BINARY_NAME)
+	rm -rf ~/.local/lib/rrunner
+	@echo '$(GREEN)$(BINARY_NAME) uninstalled!$(RESET)'
+
+## CI/CD
+ci: ## Run CI pipeline
+	@echo '$(BLUE)Running CI pipeline...$(RESET)'
+	$(MAKE) clean
+	$(MAKE) install-tools
+	$(MAKE) fmt
+	$(MAKE) lint
+	$(MAKE) vet
+	$(MAKE) security-scan
+	$(MAKE) test-coverage
+	$(MAKE) build-all
+	$(MAKE) validate-enhanced
+	@echo '$(GREEN)CI pipeline completed!$(RESET)'
+
+cd: ci release package ## Run CD pipeline (includes CI + release)
+	@echo '$(GREEN)CD pipeline completed!$(RESET)'
+
+## Maintenance
+clean: ## Clean build artifacts
+	@echo '$(BLUE)Cleaning build artifacts...$(RESET)'
+	rm -rf $(BIN_DIR) $(BUILD_DIR) $(DIST_DIR) $(COVERAGE_DIR)
+	rm -f *.log *.prof profiles/*
+	go clean -cache -testcache -modcache
+	@echo '$(GREEN)Clean complete!$(RESET)'
+
+clean-deep: clean ## Deep clean including dependencies
+	@echo '$(BLUE)Deep cleaning...$(RESET)'
+	go clean -i -r -cache -testcache -modcache
+	rm -rf ~/.cache/go-build
+	@echo '$(GREEN)Deep clean complete!$(RESET)'
+
+deps: ## Download and tidy dependencies
+	@echo '$(BLUE)Managing dependencies...$(RESET)'
+	go mod download
+	go mod tidy
+	go mod verify
+	@echo '$(GREEN)Dependencies updated!$(RESET)'
+
+deps-update: ## Update all dependencies
+	@echo '$(BLUE)Updating dependencies...$(RESET)'
+	go get -u ./...
+	go mod tidy
+	@echo '$(GREEN)Dependencies updated!$(RESET)'
+
+## Legacy support
+validate-legacy: build-legacy ## Validate legacy core
+	@echo '$(BLUE)Running legacy validation...$(RESET)'
+	$(LEGACY_CORE_OUT) --validate-install --json
+	$(LEGACY_CORE_OUT) --dry-run 'rrunner://open?url=file:///$(PWD)/README.md'
+	$(LEGACY_CORE_OUT) --diagnose
+	@echo '$(GREEN)Legacy validation passed!$(RESET)'
+
+shell-syntax: ## Check shell script syntax
+	@echo '$(BLUE)Checking shell script syntax...$(RESET)'
+	bash -n bin/rrunner bin/rrunner.sh install.sh bin/md-restore.sh
+	find examples/plugins -name "*.sh" -exec bash -n {} \;
+	@echo '$(GREEN)Shell syntax check passed!$(RESET)'
+
+## Information
+info: ## Show build information
+	@echo '$(CYAN)Rrunner Enhanced Build Information$(RESET)'
+	@echo 'Version:     $(VERSION)'
+	@echo 'Build Time:  $(BUILD_TIME)'  
+	@echo 'Git Commit:  $(GIT_COMMIT)'
+	@echo 'Go Version:  $(GO_VERSION)'
+	@echo 'Binary Name: $(BINARY_NAME)'
+	@echo 'Output:      $(CORE_OUT)'
+
+version: ## Show version
+	@echo $(VERSION)
+
+## Examples
+examples: build ## Run example commands
+	@echo '$(BLUE)Running example commands...$(RESET)'
+	@echo '$(YELLOW)1. List actions:$(RESET)'
+	$(CORE_OUT) --list-actions
+	@echo '$(YELLOW)2. Explain action:$(RESET)'  
+	$(CORE_OUT) --explain-action open
+	@echo '$(YELLOW)3. Health check:$(RESET)'
+	$(CORE_OUT) --health
+	@echo '$(GREEN)Examples complete!$(RESET)'
+
+# Make sure targets that don't create files are marked as PHONY
+.PHONY: $(shell grep -E '^[a-zA-Z_-]+:' $(MAKEFILE_LIST) | cut -d':' -f1)

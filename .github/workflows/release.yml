@@ -1,0 +1,218 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+        default: '0.3.0'
+
+env:
+  GO_VERSION: 1.22.x
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Simple changelog generation
+        git log --pretty=format:"* %s" $(git describe --tags --abbrev=0 HEAD~1)..HEAD > CHANGELOG.md
+        echo "Generated changelog:"
+        cat CHANGELOG.md
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name || format('v{0}', github.event.inputs.version) }}
+        release_name: Release ${{ github.ref_name || github.event.inputs.version }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+
+  build-and-upload:
+    name: Build and Upload
+    runs-on: ubuntu-latest
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: darwin
+            arch: amd64
+          - os: darwin  
+            arch: arm64
+          - os: linux
+            arch: amd64
+          - os: linux
+            arch: arm64
+          - os: windows
+            arch: amd64
+          - os: windows
+            arch: arm64
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Get version
+      id: version
+      run: |
+        if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Build binaries
+      env:
+        GOOS: ${{ matrix.os }}
+        GOARCH: ${{ matrix.arch }}
+        VERSION: ${{ steps.version.outputs.VERSION }}
+        CGO_ENABLED: 0
+      run: |
+        # Set binary extension for Windows
+        EXT=""
+        if [[ "${{ matrix.os }}" == "windows" ]]; then
+          EXT=".exe"
+        fi
+        
+        # Build enhanced binary
+        go build \
+          -ldflags "-X main.version=$VERSION -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.gitCommit=$GITHUB_SHA" \
+          -o "rrunner-enhanced-${{ matrix.os }}-${{ matrix.arch }}${EXT}" \
+          ./cmd/rrunner-enhanced
+          
+        # Build legacy binary  
+        go build \
+          -ldflags "-X main.version=$VERSION" \
+          -o "rrunner-core-${{ matrix.os }}-${{ matrix.arch }}${EXT}" \
+          ./cmd/rrunner-core
+          
+    - name: Create package
+      run: |
+        # Set file extension
+        EXT=""
+        if [[ "${{ matrix.os }}" == "windows" ]]; then
+          EXT=".exe"
+        fi
+        
+        # Create package directory
+        PKG_DIR="rrunner-${{ steps.version.outputs.VERSION }}-${{ matrix.os }}-${{ matrix.arch }}"
+        mkdir -p "$PKG_DIR"
+        
+        # Copy files
+        cp "rrunner-enhanced-${{ matrix.os }}-${{ matrix.arch }}${EXT}" "$PKG_DIR/"
+        cp "rrunner-core-${{ matrix.os }}-${{ matrix.arch }}${EXT}" "$PKG_DIR/"
+        cp README.md "$PKG_DIR/"
+        cp LICENSE "$PKG_DIR/" 2>/dev/null || echo "No LICENSE file found"
+        
+        # Create archive
+        if [[ "${{ matrix.os }}" == "windows" ]]; then
+          zip -r "${PKG_DIR}.zip" "$PKG_DIR"
+          echo "ASSET_PATH=${PKG_DIR}.zip" >> $GITHUB_ENV
+          echo "ASSET_NAME=${PKG_DIR}.zip" >> $GITHUB_ENV
+        else
+          tar -czf "${PKG_DIR}.tar.gz" "$PKG_DIR"
+          echo "ASSET_PATH=${PKG_DIR}.tar.gz" >> $GITHUB_ENV  
+          echo "ASSET_NAME=${PKG_DIR}.tar.gz" >> $GITHUB_ENV
+        fi
+        
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ env.ASSET_PATH }}
+        asset_name: ${{ env.ASSET_NAME }}
+        asset_content_type: application/octet-stream
+
+  docker-release:
+    name: Docker Release
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Get version
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          deathrashed/rrunner:latest
+          deathrashed/rrunner:${{ steps.version.outputs.VERSION }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  homebrew:
+    name: Update Homebrew
+    runs-on: ubuntu-latest
+    needs: [create-release, build-and-upload]
+    if: github.ref_type == 'tag' && !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc')
+    
+    steps:
+    - name: Update Homebrew formula
+      uses: dawidd6/action-homebrew-bump-formula@v3
+      with:
+        token: ${{ secrets.HOMEBREW_TOKEN }}
+        formula: rrunner
+        tag: ${{ github.ref_name }}
+        revision: ${{ github.sha }}
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [create-release, build-and-upload, docker-release]
+    if: always()
+    
+    steps:
+    - name: Notify success
+      if: needs.create-release.result == 'success' && needs.build-and-upload.result == 'success'
+      run: |
+        echo "🚀 Release ${{ github.ref_name || github.event.inputs.version }} created successfully!"
+        echo "📦 Binaries uploaded for all platforms"
+        echo "🐳 Docker images published"
+        
+    - name: Notify failure  
+      if: needs.create-release.result == 'failure' || needs.build-and-upload.result == 'failure'
+      run: echo "❌ Release failed!"

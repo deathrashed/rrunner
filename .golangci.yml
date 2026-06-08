@@ -1,0 +1,345 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  skip-dirs:
+    - vendor
+    - .git
+    - bin
+    - build
+    - dist
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_generated\\.go$"
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - cyclop
+    - dupl
+    - durationcheck
+    - errname
+    - errorlint
+    - execinquery
+    - exhaustive
+    - exportloopref
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gci
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - godox
+    - goerr113
+    - gofmt
+    - gofumpt
+    - goheader
+    - goimports
+    - gomnd
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - grouper
+    - importas
+    - interfacebloat
+    - ireturn
+    - lll
+    - loggercheck
+    - maintidx
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - nlreturn
+    - noctx
+    - nolintlint
+    - nonamedreturns
+    - nosprintfhostport
+    - prealloc
+    - predeclared
+    - promlinter
+    - reassign
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tagliatelle
+    - tenv
+    - testableexamples
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    - wrapcheck
+    - wsl
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    check-shadowing: true
+    enable:
+      - atomic
+      - bools
+      - buildtag
+      - copylocks
+      - fieldalignment
+      - httpresponse
+      - loopclosure
+      - lostcancel
+      - nilfunc
+      - printf
+      - shift
+      - stdmethods
+      - structtag
+      - tests
+      - unmarshal
+      - unreachable
+      - unsafeptr
+      - unusedresult
+
+  golint:
+    min-confidence: 0.8
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/deathrashed/rrunner
+
+  gocyclo:
+    min-complexity: 15
+
+  gocognit:
+    min-complexity: 20
+
+  cyclop:
+    max-complexity: 15
+
+  funlen:
+    lines: 100
+    statements: 50
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - unnecessaryBlock
+      - wrapperFunc
+      - ifElseChain
+      - singleCaseSwitch
+
+  lll:
+    line-length: 120
+
+  misspell:
+    locale: US
+
+  nakedret:
+    max-func-lines: 30
+
+  nestif:
+    min-complexity: 4
+
+  gomnd:
+    settings:
+      mnd:
+        checks:
+          - argument
+          - case
+          - condition
+          - operation
+          - return
+          - assign
+        ignored-numbers: 0,1,2,8,10,16,24,32,64,100,200,400,401,403,404,500,503,1000,1024,2048,4096,8080,8443
+        ignored-functions: strconv.FormatInt,strconv.ParseInt,strconv.Atoi,time.Sleep,time.Duration
+
+  gosec:
+    severity: medium
+    confidence: medium
+    excludes:
+      - G104  # Audit errors not checked
+      - G204  # Subprocess launched with variable
+      - G301  # Poor file permissions used when creating a directory
+      - G302  # Poor file permissions used with chmod
+      - G304  # File path provided as taint input
+      - G306  # Poor file permissions used when writing to a file
+      - G404  # Insecure random number source (rand)
+
+  godot:
+    scope: declarations
+    capital: false
+
+  godox:
+    keywords:
+      - FIXME
+      - BUG
+      - HACK
+
+  goheader:
+    template-path: .license-header.txt
+
+  revive:
+    min-confidence: 0.8
+    rules:
+      - name: atomic
+      - name: blank-imports
+      - name: bool-literal-in-expr
+      - name: confusing-naming
+      - name: constant-logical-expr
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: deep-exit
+      - name: defer
+      - name: dot-imports
+      - name: duplicated-imports
+      - name: early-return
+      - name: empty-block
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      - name: exported
+      - name: function-result-limit
+        arguments: [3]
+      - name: get-return
+      - name: identical-branches
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: max-public-structs
+        arguments: [20]
+      - name: modifies-parameter
+      - name: modifies-value-receiver
+      - name: package-comments
+      - name: range
+      - name: range-val-in-closure
+      - name: range-val-address
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: string-of-int
+      - name: struct-tag
+      - name: superfluous-else
+      - name: time-equal
+      - name: time-naming
+      - name: unexported-naming
+      - name: unexported-return
+      - name: unhandled-error
+      - name: unnecessary-stmt
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: unused-receiver
+      - name: useless-break
+      - name: var-declaration
+      - name: var-naming
+
+  stylecheck:
+    checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
+
+  unparam:
+    check-exported: false
+
+  unused:
+    check-exported: false
+
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+  wrapcheck:
+    ignoreSigs:
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gomnd
+        - goconst
+        - funlen
+        - lll
+        - dupl
+        - goerr113
+        - wrapcheck
+        - forcetypeassert
+
+    - path: cmd/
+      linters:
+        - gochecknoinits
+        - gomnd
+        - wrapcheck
+
+    - path: internal/testing/
+      linters:
+        - funlen
+        - goconst
+        - gomnd
+
+    - text: "Use of weak random number generator"
+      linters:
+        - gosec
+
+    - text: "G404:"
+      linters:
+        - gosec
+
+  exclude:
+    - 'declaration of "(err|ctx)" shadows declaration at'
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+severity:
+  default-severity: error
+  case-sensitive: false
+  rules:
+    - linters:
+        - dupl
+      severity: info
+    - linters:
+        - goconst
+        - gomnd
+      severity: warning
