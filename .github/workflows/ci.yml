@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: 1.22.x
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.21.x, 1.22.x]
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Verify dependencies
+      run: go mod verify
+      
+    - name: Run tests
+      run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Build legacy binary
+      run: go build -o bin/rrunner-core ./cmd/rrunner-core
+      
+    - name: Build enhanced binary  
+      run: go build -o bin/rrunner-enhanced ./cmd/rrunner-enhanced
+      
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries-${{ matrix.os }}
+        path: bin/
